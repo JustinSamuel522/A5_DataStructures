@@ -1,7 +1,7 @@
-A5: A5.c
+a5: A5.c
 	gcc -o a5 A5.c
 
-a5: A5
+run: A5
 	./a5 points.txt
 
 clean: # remove all machine-generated files

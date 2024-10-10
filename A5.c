@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>  // For sqrt
 
-#define INITIAL_CAPACITY 100 // Starting capacity, can grow dynamically
+#define INITIAL_CAPACITY 100
 
 // Define a structure for points
 struct Point {
@@ -42,24 +43,68 @@ struct Node* buildBalancedBST(struct Point* points, int start, int end) {
         return NULL;
     }
 
-    // Find the middle point to ensure balance
     int mid = (start + end) / 2;
     struct Node* root = createNode(points[mid].x, points[mid].y);
 
-    // Recursively build the left and right subtrees
     root->left = buildBalancedBST(points, start, mid - 1);
     root->right = buildBalancedBST(points, mid + 1, end);
 
     return root;
 }
 
+// Function to check if a point is within the circle
 int isInsideCircle(int x, int y, int center_x, int center_y, int radius_squared) {
     int dx = x - center_x;
     int dy = y - center_y;
     return (dx * dx + dy * dy <= radius_squared); 
 }
 
+// Binary search to find the lower bound of y-coordinates within a given range
+int findLowerBoundY(struct Point* points, int numPoints, int minY) {
+    int low = 0, high = numPoints - 1;
+    while (low < high) {
+        int mid = (low + high) / 2;
+        if (points[mid].y >= minY)
+            high = mid;
+        else
+            low = mid + 1;
+    }
+    return low;
+}
 
+// Binary search to find the upper bound of y-coordinates within a given range
+int findUpperBoundY(struct Point* points, int numPoints, int maxY) {
+    int low = 0, high = numPoints - 1;
+    while (low < high) {
+        int mid = (low + high) / 2;
+        if (points[mid].y > maxY)
+            high = mid;
+        else
+            low = mid + 1;
+    }
+    return low;
+}
+
+// Optimized function for counting points with the same x-coordinate
+int countPointsWithSameX(struct Point* points, int numPoints, int center_x, int center_y, int radius) {
+    int radius_squared = radius * radius;
+    int minY = center_y - radius;
+    int maxY = center_y + radius;
+    
+    int lowerBound = findLowerBoundY(points, numPoints, minY);
+    int upperBound = findUpperBoundY(points, numPoints, maxY);
+    
+    int count = 0;
+    for (int i = lowerBound; i <= upperBound && i < numPoints; i++) {
+        if (isInsideCircle(points[i].x, points[i].y, center_x, center_y, radius_squared)) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+// Function to count points inside the circle using the BST
 int countPointsInCircle(struct Node* root, int center_x, int center_y, int radius) {
     if (root == NULL) {
         return 0;
@@ -67,24 +112,31 @@ int countPointsInCircle(struct Node* root, int center_x, int center_y, int radiu
 
     int radius_squared = radius * radius;
     int count = 0;
+
     if (isInsideCircle(root->x, root->y, center_x, center_y, radius_squared)) {
         count = 1;
     }
 
-    if (root->x >= center_x - radius || root->y >= center_y - radius) {
+    if (root->x >= center_x - radius) {
         count += countPointsInCircle(root->left, center_x, center_y, radius);
     }
 
-    if (root->x <= center_x + radius || root->y <= center_y + radius) {
+    if (root->x <= center_x + radius) {
         count += countPointsInCircle(root->right, center_x, center_y, radius);
     }
 
     return count;
 }
 
+// Free the memory for the BST
+void freeTree(struct Node* root) {
+    if (root == NULL) return;
+    freeTree(root->left);
+    freeTree(root->right);
+    free(root);
+}
 
 int main(int argc, char* argv[]) {
-    
 
     FILE *file = fopen(argv[1], "r");
     if (file == NULL) {
@@ -92,7 +144,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Dynamically allocate memory for points array
     int capacity = INITIAL_CAPACITY;
     struct Point* points = (struct Point*)malloc(capacity * sizeof(struct Point));
     if (points == NULL) {
@@ -102,11 +153,9 @@ int main(int argc, char* argv[]) {
     int numPoints = 0;
     int x, y;
 
-    // Read points from the file and resize the array if necessary
     while (fscanf(file, "%d %d", &x, &y) == 2) {
-        // Resize the array if it's full
         if (numPoints == capacity) {
-            capacity += 1; // add 1 to our capacity if our array is full
+            capacity *= 2;
             struct Point* temp = (struct Point*)realloc(points, capacity * sizeof(struct Point));
             if (temp == NULL) {
                 free(points);
@@ -115,35 +164,32 @@ int main(int argc, char* argv[]) {
             points = temp;
         }
 
-        // Store the point in the array
         points[numPoints].x = x;
         points[numPoints].y = y;
         numPoints++;
     }
     fclose(file);
 
-    // Sort the points by x and y
     qsort(points, numPoints, sizeof(struct Point), comparePoints);
 
-    // Build a balanced BST from the sorted points
-    struct Node* root = buildBalancedBST(points, 0, numPoints - 1);
-
-
-    // Handle queries (you can reuse the query code from the previous solution)
-    int center_x, center_y, radius;
-    while (1) {
-        if (scanf("%d %d %d", &center_x, &center_y, &radius) != 3) {
-            break;
+    // Check if all points have the same x-coordinate
+    if (points[0].x == points[numPoints - 1].x) {
+        int center_x, center_y, radius;
+        while (scanf("%d %d %d", &center_x, &center_y, &radius) == 3) {
+            int count = countPointsWithSameX(points, numPoints, center_x, center_y, radius);
+            printf("%d\n", count);
         }
-
-
-        int count = countPointsInCircle(root, center_x, center_y, radius);
-        printf("%d\n", count);
+    } else {
+        struct Node* root = buildBalancedBST(points, 0, numPoints - 1);
+        int center_x, center_y, radius;
+        while (scanf("%d %d %d", &center_x, &center_y, &radius) == 3) {
+            int count = countPointsInCircle(root, center_x, center_y, radius);
+            printf("%d\n", count);
+        }
+        freeTree(root);
     }
 
-    // Free dynamically allocated memory before exiting
     free(points);
 
     return 0;
 }
-
